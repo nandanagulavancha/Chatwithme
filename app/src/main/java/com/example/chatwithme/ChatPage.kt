@@ -1,6 +1,13 @@
 package com.example.chatwithme
 
+import androidx.compose.material.icons.outlined.Image
+
+
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,32 +37,35 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.rememberAsyncImagePainter
 import com.example.chatwithme.ui.theme.ColorModelMessage
 import com.example.chatwithme.ui.theme.ColorUserMessage
 import com.example.chatwithme.ui.theme.Purple80
 
 @RequiresApi(35)
 @Composable
-fun ChatPage(modifier: Modifier = Modifier,viewModel: ChatViewModel) {
-    Column(
-        modifier = modifier
-    ) {
+fun ChatPage(modifier: Modifier = Modifier, viewModel: ChatViewModel) {
+    val context = LocalContext.current // Get context
+
+    Column(modifier = modifier) {
         AppHeader()
         MessageList(
             modifier = Modifier.weight(1f),
             messageList = viewModel.messageList
         )
         MessageInput(
-            onMessageSend = {
-                viewModel.sendMessage(it)
+            onMessageSend = { message, imageUri ->
+                viewModel.sendMessage(context, message, imageUri) // Pass context here
             }
         )
     }
 }
+
 
 
 @Composable
@@ -90,83 +100,68 @@ fun MessageList(modifier: Modifier = Modifier,messageList : List<MessageModel>) 
 
 @Composable
 fun MessageRow(messageModel: MessageModel) {
-    val isModel = messageModel.role=="model"
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-
-        Box(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-
+    val isModel = messageModel.role == "model"
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.fillMaxWidth()) {
             Box(
                 modifier = Modifier
                     .align(if (isModel) Alignment.BottomStart else Alignment.BottomEnd)
-                    .padding(
-                        start = if (isModel) 8.dp else 70.dp,
-                        end = if (isModel) 70.dp else 8.dp,
-                        top = 8.dp,
-                        bottom = 8.dp
-                    )
+                    .padding(8.dp)
                     .clip(RoundedCornerShape(48f))
                     .background(if (isModel) ColorModelMessage else ColorUserMessage)
                     .padding(16.dp)
             ) {
-
-                SelectionContainer {
-                    Text(
-                        text = messageModel.message,
-                        fontWeight = FontWeight.W500,
-                        color = Color.White
-                    )
+                Column {
+                    if (messageModel.imageUrl != null) {
+                        Image(
+                            painter = rememberAsyncImagePainter(messageModel.imageUrl),
+                            contentDescription = "Sent Image",
+                            modifier = Modifier.size(200.dp).clip(RoundedCornerShape(8.dp))
+                        )
+                    }
+                    if (messageModel.message.isNotEmpty()) {
+                        Text(text = messageModel.message, color = Color.White, fontWeight = FontWeight.W500)
+                    }
                 }
-
-
             }
-
         }
-
-
     }
-
-
 }
 
 
 
 @Composable
-fun MessageInput(onMessageSend : (String)-> Unit) {
-
-    var message by remember {
-        mutableStateOf("")
+fun MessageInput(onMessageSend: (String, String?) -> Unit) {
+    var message by remember { mutableStateOf("") }
+    var imageUri by remember { mutableStateOf<Uri?>(null) }
+    val launcher = rememberLauncherForActivityResult(contract = ActivityResultContracts.GetContent()) {
+            uri: Uri? -> imageUri = uri
     }
 
     Row(
         modifier = Modifier.padding(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        IconButton(onClick = { launcher.launch("image/*") }) {
+            Icon(imageVector = Icons.Outlined.Image, contentDescription = "Pick Image")
+        }
         OutlinedTextField(
             modifier = Modifier.weight(1f),
             value = message,
-            onValueChange = {
-                message = it
-            }
+            onValueChange = { message = it }
         )
         IconButton(onClick = {
-            if(message.isNotEmpty()){
-                onMessageSend(message)
+            if (message.isNotEmpty() || imageUri != null) {
+                onMessageSend(message, imageUri?.toString())
                 message = ""
+                imageUri = null
             }
-
         }) {
-            Icon(
-                imageVector = Icons.Default.Send,
-                contentDescription = "Send"
-            )
+            Icon(imageVector = Icons.Default.Send, contentDescription = "Send")
         }
     }
 }
+
 
 @Composable
 fun AppHeader() {

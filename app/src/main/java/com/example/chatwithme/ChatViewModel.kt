@@ -8,6 +8,16 @@ import androidx.lifecycle.viewModelScope
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.content
 import kotlinx.coroutines.launch
+import android.net.Uri
+import androidx.core.net.toFile
+import java.io.File
+import java.io.FileInputStream
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import androidx.core.net.toFile
+import java.io.InputStream
+import android.content.Context
+
 
 class ChatViewModel : ViewModel() {
 
@@ -16,33 +26,64 @@ class ChatViewModel : ViewModel() {
     }
 
     val generativeModel : GenerativeModel = GenerativeModel(
-        modelName = "gemini-2.0-flash",
+        modelName = "gemini-1.5-pro",
         apiKey = Constants.apiKey
     )
 
     @RequiresApi(35)
-    fun sendMessage(question : String){
+    fun sendMessage(context: Context, text: String, imageUri: String?) {
         viewModelScope.launch {
-
-            try{
+            try {
                 val chat = generativeModel.startChat(
                     history = messageList.map {
-                        content(it.role){ text(it.message) }
+                        content(it.role) { text(it.message) }
                     }.toList()
                 )
 
-                messageList.add(MessageModel(question,"user"))
-                messageList.add(MessageModel("Typing....","model"))
+                messageList.add(MessageModel(text, imageUri, "user"))
+                messageList.add(MessageModel("Typing...", null, "model"))
 
-                val response = chat.sendMessage(question)
+                val response = if (imageUri != null) {
+                    val bitmap = convertUriToBitmap(context, Uri.parse(imageUri)) // Pass context
+                    if (bitmap != null) {
+                        chat.sendMessage(
+                            content {
+                                text(text)
+                                image(bitmap)
+                            }
+                        )
+                    } else {
+                        chat.sendMessage(text) // Fallback if image conversion fails
+                    }
+                } else {
+                    chat.sendMessage(text)
+                }
+
                 messageList.removeLast()
-                messageList.add(MessageModel(response.text.toString(),"model"))
-            }catch (e : Exception){
+                messageList.add(MessageModel(response.text.toString(), null, "model"))
+            } catch (e: Exception) {
                 messageList.removeLast()
-                messageList.add(MessageModel("Error : "+e.message.toString(),"model"))
+                messageList.add(MessageModel("Error: ${e.message}", null, "model"))
             }
-
-
         }
     }
+
+
+
+
+    fun convertUriToBitmap(context: Context, uri: Uri): Bitmap? {
+        return try {
+            val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
+            BitmapFactory.decodeStream(inputStream)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+
+
+
+
+
 }
